@@ -1,0 +1,12 @@
+{
+  "domain": "blocky",
+  "name": "Blocky DNS",
+  "codeowners": ["@schwobaland"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/schwobaland/blocky-ha",
+  "integration_type": "hub",
+  "iot_class": "local_polling",
+  "requirements": [],
+  "version": "1.0.0"
+}

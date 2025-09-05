@@ -1,0 +1,33 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Setup Blocky DNS",
+        "description": "Enter your Blocky server details",
+        "data": {
+          "host": "Host",
+          "port": "Port"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to Blocky server",
+      "invalid_response": "Invalid response from Blocky server",
+      "unknown": "Unexpected error occurred"
+    },
+    "abort": {
+      "already_configured": "Device is already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Blocky Options",
+        "data": {
+          "scan_interval": "Scan Interval (seconds)",
+          "timeout": "Timeout (seconds)"
+        }
+      }
+    }
+  }
+}
