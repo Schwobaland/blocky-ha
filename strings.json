@@ -3,29 +3,46 @@
     "step": {
       "user": {
         "title": "Setup Blocky DNS",
-        "description": "Enter your Blocky server details",
+        "description": "Enter your Blocky server details and configure monitoring options",
         "data": {
           "host": "Host",
-          "port": "Port"
+          "port": "API Port",
+          "prometheus_enabled": "Enable Prometheus Metrics",
+          "prometheus_port": "Prometheus Metrics Port"
+        },
+        "data_description": {
+          "host": "IP address or hostname of your Blocky server",
+          "port": "Port where Blocky API is running (usually 4000)",
+          "prometheus_enabled": "Collect detailed statistics and performance metrics",
+          "prometheus_port": "Port where Prometheus metrics are exposed (same as API port if not configured separately)"
         }
       }
     },
     "error": {
-      "cannot_connect": "Failed to connect to Blocky server",
-      "invalid_response": "Invalid response from Blocky server",
-      "unknown": "Unexpected error occurred"
+      "cannot_connect": "Failed to connect to Blocky server. Please check the host and port settings.",
+      "invalid_response": "Invalid response from Blocky server. Please verify the API is enabled.",
+      "unknown": "Unexpected error occurred during setup"
     },
     "abort": {
-      "already_configured": "Device is already configured"
+      "already_configured": "A Blocky instance with this configuration is already set up"
     }
   },
   "options": {
     "step": {
       "init": {
-        "title": "Blocky Options",
+        "title": "Blocky Configuration Options",
+        "description": "Configure update intervals and monitoring options",
         "data": {
-          "scan_interval": "Scan Interval (seconds)",
-          "timeout": "Timeout (seconds)"
+          "scan_interval": "Update Interval (seconds)",
+          "timeout": "Connection Timeout (seconds)", 
+          "prometheus_enabled": "Enable Prometheus Metrics",
+          "prometheus_port": "Prometheus Metrics Port"
+        },
+        "data_description": {
+          "scan_interval": "How often to check Blocky status and update sensors",
+          "timeout": "Maximum time to wait for Blocky to respond",
+          "prometheus_enabled": "Enable detailed performance and statistics monitoring",
+          "prometheus_port": "Port where Prometheus metrics are exposed"
         }
       }
     }

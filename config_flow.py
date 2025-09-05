@@ -15,7 +15,17 @@ from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.exceptions import HomeAssistantError
 
-from .const import DOMAIN, DEFAULT_PORT, DEFAULT_SCAN_INTERVAL, CONF_TIMEOUT, DEFAULT_TIMEOUT
+from .const import (
+    DOMAIN, 
+    DEFAULT_PORT, 
+    DEFAULT_SCAN_INTERVAL, 
+    CONF_TIMEOUT, 
+    DEFAULT_TIMEOUT,
+    CONF_PROMETHEUS_ENABLED,
+    CONF_PROMETHEUS_PORT,
+    DEFAULT_PROMETHEUS_ENABLED,
+    DEFAULT_PROMETHEUS_PORT,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -23,6 +33,8 @@ STEP_USER_DATA_SCHEMA = vol.Schema(
     {
         vol.Required(CONF_HOST): str,
         vol.Optional(CONF_PORT, default=DEFAULT_PORT): int,
+        vol.Optional(CONF_PROMETHEUS_ENABLED, default=DEFAULT_PROMETHEUS_ENABLED): bool,
+        vol.Optional(CONF_PROMETHEUS_PORT, default=DEFAULT_PROMETHEUS_PORT): int,
     }
 )
 
@@ -47,6 +59,19 @@ async def validate_input(hass: HomeAssistant, data: dict[str, Any]) -> dict[str,
         raise CannotConnect(f"Cannot connect to Blocky: {err}")
     except Exception as err:
         raise CannotConnect(f"Unexpected error: {err}")
+
+    # Validate Prometheus endpoint if enabled
+    if data.get(CONF_PROMETHEUS_ENABLED, False):
+        prometheus_port = data.get(CONF_PROMETHEUS_PORT, port)
+        prometheus_url = f"http://{host}:{prometheus_port}/metrics"
+        
+        try:
+            async with async_timeout.timeout(10):
+                async with session.get(prometheus_url) as response:
+                    if response.status != 200:
+                        raise CannotConnect("Prometheus metrics endpoint not accessible")
+        except aiohttp.ClientError:
+            raise CannotConnect("Cannot connect to Prometheus metrics endpoint")
 
     return {"title": f"Blocky ({host}:{port})"}
 
@@ -121,6 +146,20 @@ class BlockyOptionsFlowHandler(config_entries.OptionsFlow):
                             CONF_TIMEOUT, DEFAULT_TIMEOUT
                         ),
                     ): int,
+                    vol.Optional(
+                        CONF_PROMETHEUS_ENABLED,
+                        default=self.config_entry.options.get(
+                            CONF_PROMETHEUS_ENABLED, 
+                            self.config_entry.data.get(CONF_PROMETHEUS_ENABLED, DEFAULT_PROMETHEUS_ENABLED)
+                        ),
+                    ): bool,
+                    vol.Optional(
+                        CONF_PROMETHEUS_PORT,
+                        default=self.config_entry.options.get(
+                            CONF_PROMETHEUS_PORT,
+                            self.config_entry.data.get(CONF_PROMETHEUS_PORT, DEFAULT_PROMETHEUS_PORT)
+                        ),
+                    ): int,
                 }
             ),
         )
@@ -132,4 +171,3 @@ class CannotConnect(HomeAssistantError):
 
 class InvalidResponse(HomeAssistantError):
     """Error to indicate invalid response."""
-

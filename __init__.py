@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from datetime import timedelta
+from typing import Any
 
 import aiohttp
 import async_timeout
@@ -22,7 +24,14 @@ from .const import (
     DEFAULT_SCAN_INTERVAL,
     CONF_TIMEOUT,
     DEFAULT_TIMEOUT,
+    CONF_PROMETHEUS_ENABLED,
+    CONF_PROMETHEUS_PORT,
+    DEFAULT_PROMETHEUS_ENABLED,
+    DEFAULT_PROMETHEUS_PORT,
+    ATTR_ENABLED,
+    ATTR_AUTO_ENABLE_IN_SEC,
     ATTR_DISABLED_GROUPS,
+    PROMETHEUS_METRICS,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -36,9 +45,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     port = entry.data.get(CONF_PORT, DEFAULT_PORT)
     scan_interval = entry.options.get(CONF_SCAN_INTERVAL, DEFAULT_SCAN_INTERVAL)
     timeout = entry.options.get(CONF_TIMEOUT, DEFAULT_TIMEOUT)
+    
+    # Prometheus settings (check both options and data for backwards compatibility)
+    prometheus_enabled = entry.options.get(
+        CONF_PROMETHEUS_ENABLED,
+        entry.data.get(CONF_PROMETHEUS_ENABLED, DEFAULT_PROMETHEUS_ENABLED)
+    )
+    prometheus_port = entry.options.get(
+        CONF_PROMETHEUS_PORT,
+        entry.data.get(CONF_PROMETHEUS_PORT, DEFAULT_PROMETHEUS_PORT)
+    )
 
     coordinator = BlockyDataUpdateCoordinator(
-        hass, host, port, timedelta(seconds=scan_interval), timeout
+        hass, host, port, timedelta(seconds=scan_interval), timeout, 
+        prometheus_enabled, prometheus_port
     )
 
     await coordinator.async_config_entry_first_refresh()
@@ -81,13 +101,18 @@ class BlockyDataUpdateCoordinator(DataUpdateCoordinator):
         port: int,
         update_interval: timedelta,
         timeout: int,
+        prometheus_enabled: bool = False,
+        prometheus_port: int = DEFAULT_PROMETHEUS_PORT,
     ) -> None:
         """Initialize."""
         self.host = host
         self.port = port
         self.timeout = timeout
+        self.prometheus_enabled = prometheus_enabled
+        self.prometheus_port = prometheus_port
         self.session = async_get_clientsession(hass)
         self.base_url = f"http://{host}:{port}/api"
+        self.prometheus_url = f"http://{host}:{prometheus_port}/metrics"
 
         super().__init__(
             hass,
@@ -100,8 +125,9 @@ class BlockyDataUpdateCoordinator(DataUpdateCoordinator):
         """Update data via library."""
         try:
             async with async_timeout.timeout(self.timeout):
+                # Always fetch basic API data
                 data = await self._fetch_status()
-                _LOGGER.debug(f"Received data from Blocky API: {data}")
+                _LOGGER.debug(f"Received API data from Blocky: {data}")
                 
                 # Ensure disabledGroups is always a list
                 if ATTR_DISABLED_GROUPS not in data:
@@ -110,6 +136,18 @@ class BlockyDataUpdateCoordinator(DataUpdateCoordinator):
                     data[ATTR_DISABLED_GROUPS] = []
                 elif not isinstance(data[ATTR_DISABLED_GROUPS], list):
                     data[ATTR_DISABLED_GROUPS] = []
+                
+                # Fetch Prometheus metrics if enabled
+                if self.prometheus_enabled:
+                    try:
+                        prometheus_data = await self._fetch_prometheus_metrics()
+                        data["prometheus"] = prometheus_data
+                        _LOGGER.debug(f"Received Prometheus data: {len(prometheus_data)} metrics")
+                    except Exception as e:
+                        _LOGGER.warning(f"Failed to fetch Prometheus metrics: {e}")
+                        data["prometheus"] = {}
+                else:
+                    data["prometheus"] = {}
                 
                 return data
         except asyncio.TimeoutError as exception:
@@ -127,6 +165,69 @@ class BlockyDataUpdateCoordinator(DataUpdateCoordinator):
             if response.status != 200:
                 raise UpdateFailed(f"API returned {response.status}")
             return await response.json()
+
+    async def _fetch_prometheus_metrics(self) -> dict[str, Any]:
+        """Fetch and parse Prometheus metrics."""
+        async with self.session.get(self.prometheus_url) as response:
+            if response.status != 200:
+                raise UpdateFailed(f"Prometheus metrics returned {response.status}")
+            
+            metrics_text = await response.text()
+            return self._parse_prometheus_metrics(metrics_text)
+
+    def _parse_prometheus_metrics(self, metrics_text: str) -> dict[str, Any]:
+        """Parse Prometheus metrics text format."""
+        metrics = {}
+        
+        for line in metrics_text.split('\n'):
+            line = line.strip()
+            if not line or line.startswith('#'):
+                continue
+            
+            # Parse metric line: metric_name{labels} value timestamp
+            match = re.match(r'^([a-zA-Z_:][a-zA-Z0-9_:]*)?(\{[^}]*\})?\s+([^\s]+)', line)
+            if not match:
+                continue
+                
+            metric_name = match.group(1)
+            labels_str = match.group(2) or ""
+            value_str = match.group(3)
+            
+            # Only parse metrics we're interested in
+            if metric_name not in PROMETHEUS_METRICS.values():
+                continue
+            
+            try:
+                # Try to convert to number
+                if '.' in value_str:
+                    value = float(value_str)
+                else:
+                    value = int(value_str)
+            except ValueError:
+                value = value_str
+            
+            # Parse labels if present
+            labels = {}
+            if labels_str:
+                # Simple label parsing - remove braces and split by comma
+                labels_content = labels_str[1:-1]  # Remove { and }
+                for label_pair in labels_content.split(','):
+                    if '=' in label_pair:
+                        key, val = label_pair.split('=', 1)
+                        key = key.strip()
+                        val = val.strip().strip('"')
+                        labels[key] = val
+            
+            # Store metric with its labels
+            if metric_name not in metrics:
+                metrics[metric_name] = []
+            
+            metrics[metric_name].append({
+                'value': value,
+                'labels': labels
+            })
+        
+        return metrics
 
     async def enable_blocking(self) -> bool:
         """Enable blocking."""
