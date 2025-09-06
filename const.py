@@ -37,7 +37,7 @@ PROMETHEUS_METRICS = {
     "blocking_enabled": "blocky_blocking_enabled",
     "cache_entries": "blocky_cache_entries",
     "cache_hits_total": "blocky_cache_hits_total",
-    "cache_miss_count": "blocky_cache_miss_count",
+    "cache_misses_total": "blocky_cache_misses_total",
     "last_list_group_refresh": "blocky_last_list_group_refresh_timestamp_seconds",
     "prefetches_total": "blocky_prefetches_total",
     "prefetch_hits_total": "blocky_prefetch_hits_total",

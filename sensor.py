@@ -247,7 +247,7 @@ class BlockyCacheMissesSensor(BlockyPrometheusBaseSensor):
     
     def __init__(self, coordinator: BlockyDataUpdateCoordinator) -> None:
         """Initialize the sensor."""
-        super().__init__(coordinator, PROMETHEUS_METRICS["cache_miss_count"], "Blocky Cache Misses")
+        super().__init__(coordinator, PROMETHEUS_METRICS["cache_misses_total"], "Blocky Cache Misses")
         self._attr_icon = "mdi:database-remove"
         self._attr_state_class = SensorStateClass.TOTAL_INCREASING
 
